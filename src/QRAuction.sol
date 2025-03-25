@@ -14,21 +14,23 @@ contract QRAuction is Ownable, Pausable, ReentrancyGuard, AuctionStorageV1 {
     /// events -------------------------------.
 
     /// @notice Emitted when a bid is placed
-    /// @param tokenId The ERC-721 token id
+    /// @param tokenId The Auction token id
     /// @param bidder The address of the bidder
     /// @param amount The amount of ETH
     /// @param extended If the bid extended the auction
     /// @param endTime The end time of the auction
-    event AuctionBid(uint256 tokenId, address bidder, uint256 amount, bool extended, uint256 endTime);
+    /// @param urlString bid url data
+    event AuctionBid(uint256 tokenId, address bidder, uint256 amount, bool extended, uint256 endTime, string urlString);
 
     /// @notice Emitted when an auction is settled
-    /// @param tokenId The ERC-721 token id of the settled auction
+    /// @param tokenId The Auction token id
     /// @param winner The address of the winning bidder
     /// @param amount The amount of ETH raised from the winning bid
-    event AuctionSettled(uint256 tokenId, address winner, uint256 amount);
+    /// @param urlString bid url data
+    event AuctionSettled(uint256 tokenId, address winner, uint256 amount, string urlString);
 
     /// @notice Emitted when an auction is created
-    /// @param tokenId The ERC-721 token id of the created auction
+    /// @param tokenId TThe Auction token id
     /// @param startTime The start time of the created auction
     /// @param endTime The end time of the created auction
     event AuctionCreated(uint256 tokenId, uint256 startTime, uint256 endTime);
@@ -115,10 +117,7 @@ contract QRAuction is Ownable, Pausable, ReentrancyGuard, AuctionStorageV1 {
         settings.treasury = _treasury;
         settings.timeBuffer = INITIAL_TIME_BUFFER;
         settings.minBidIncrement = INITIAL_MIN_BID_INCREMENT_PERCENT;
-        // settings.launched = true;
         _pause();
-        // create aution
-        // _createAuction();
     }
 
     /// @dev Settles the current auction
@@ -148,7 +147,8 @@ contract QRAuction is Ownable, Pausable, ReentrancyGuard, AuctionStorageV1 {
                 _handleOutgoingTransfer(settings.treasury, highestBid);
             }
 
-            settings.qrMetadata = _auction.qrMetadata;
+            settings.qrMetadata.validUntil = block.timestamp + settings.duration;
+            settings.qrMetadata.urlString = _auction.qrMetadata.urlString;
 
         } else {
             // resort to default QR metadata
@@ -156,15 +156,14 @@ contract QRAuction is Ownable, Pausable, ReentrancyGuard, AuctionStorageV1 {
             settings.qrMetadata.urlString = "0x";
         }
 
-        // add url metadata
-        emit AuctionSettled(_auction.tokenId, _auction.highestBidder, _auction.highestBid);
+        emit AuctionSettled(_auction.tokenId, _auction.highestBidder, _auction.highestBid, _auction.qrMetadata.urlString);
     }
 
     /// @dev Creates an auction for the next token
     function _createAuction() private returns (bool) {
         // Get the next token available for bidding
        // Store the token id
-        auction.tokenId += auction.tokenId;
+        auction.tokenId += 1;
 
         // Cache the current timestamp
         uint256 startTime = block.timestamp;
@@ -186,7 +185,7 @@ contract QRAuction is Ownable, Pausable, ReentrancyGuard, AuctionStorageV1 {
         auction.highestBid = 0;
         auction.highestBidder = address(0);
         auction.settled = false;
-        auction.qrMetadata.validUntil = endTime + 24 hours;
+        auction.qrMetadata.validUntil = endTime + settings.duration;
         auction.qrMetadata.urlString = "0x";
 
         emit AuctionCreated(auction.tokenId, startTime, endTime);
@@ -206,7 +205,7 @@ contract QRAuction is Ownable, Pausable, ReentrancyGuard, AuctionStorageV1 {
     }
 
     /// @notice Creates a bid for the current token
-    /// @param _tokenId The ERC-721 token id
+    /// @param _tokenId The token id for auction
     function _createBid(uint256 _tokenId, string memory _urlString) private {
         // Ensure the bid is for the current token
         if (auction.tokenId != _tokenId) {
@@ -234,7 +233,7 @@ contract QRAuction is Ownable, Pausable, ReentrancyGuard, AuctionStorageV1 {
         auction.highestBidder = msg.sender;
 
         // update qr metadata
-        auction.qrMetadata.validUntil = auction.endTime + 24 hours;
+        auction.qrMetadata.validUntil = auction.endTime + settings.duration;
         auction.qrMetadata.urlString = _urlString;
 
         // Used to store whether to extend the auction
@@ -283,7 +282,7 @@ contract QRAuction is Ownable, Pausable, ReentrancyGuard, AuctionStorageV1 {
             _handleOutgoingTransfer(lastHighestBidder, lastHighestBid);
         }
 
-        emit AuctionBid(_tokenId, msg.sender, msgValue, extend, auction.endTime);
+        emit AuctionBid(_tokenId, msg.sender, msgValue, extend, auction.endTime, _urlString);
     }
 
     /// @notice Transfer ETH/WETH from the contract
