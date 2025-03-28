@@ -9,3 +9,6 @@ remappings = [
     "ds-test/=node_modules/ds-test/src/"
 ]
 
+via_ir = true
+optimizer = true
+optimizer_runs = 200
